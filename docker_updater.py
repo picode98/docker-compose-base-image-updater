@@ -5,7 +5,6 @@ import json
 import yaml
 import os.path
 from pathlib import Path
-from email.message import Message
 from subprocess import check_call, CalledProcessError, TimeoutExpired
 
 def parse_image_name(image_name: str):
@@ -78,9 +77,14 @@ class PreviousRunData():
         with open(path, 'w') as prev_run_file:
             json.dump({'builds_needed': list(self.previous_image_builds_needed)}, prev_run_file)
 
+class UpdateResults(NamedTuple):
+    successful_updates: List[DockerComposeApp] = []
+    failed_updates: List[DockerComposeApp] = []
+
 
 def run_updates(docker_client: docker.DockerClient, docker_compose_apps: List[DockerComposeApp]):
     prev_run_path = 'previous_run.json'
+    run_results = UpdateResults()
 
     prev_run_data = PreviousRunData()
     try:
@@ -117,7 +121,11 @@ def run_updates(docker_client: docker.DockerClient, docker_compose_apps: List[Do
 
             if build_success:
                 print(f'Build for image "{this_app.compose_file_path}" succeeded.')
+                run_results.successful_updates.append(this_app)
                 prev_run_data.previous_image_builds_needed.remove(this_app.compose_file_path)
                 prev_run_data.write(prev_run_path)
             else:
                 print(f'Build for image "{this_app.compose_file_path}" FAILED.')
+                run_results.failed_updates.append(this_app)
+    
+    return run_results
